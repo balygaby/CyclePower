@@ -3,9 +3,9 @@ package hu.balygaby.projects.cyclepower.connectivity;
 import android.location.Location;
 
 public interface InputData {
-    public static final int INPUT_VALID = 1;
+    int INPUT_VALID = 1;
 
-    void transmitBicycleData(int validity, double wheelRpm, double pedalRpm);
+    void transmitBicycleData(int validity, double wheelRpm, double pedalRpm, double wheelRotation);
 
     /**
      * Callback when we have a new location.

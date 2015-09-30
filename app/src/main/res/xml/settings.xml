@@ -2,18 +2,18 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
     <hu.balygaby.projects.cyclepower.overdefines.CustomEditTextPreference
         android:hint="@string/bicycle_weight"
-        android:defaultValue="8"
+        android:defaultValue="8.0"
         android:key="bicycle_weight"
         android:title="@string/bicycle_weight"
-        android:inputType="number"
+        android:inputType="numberDecimal"
         android:singleLine="true"
         />
     <hu.balygaby.projects.cyclepower.overdefines.CustomEditTextPreference
         android:hint="@string/your_weight"
-        android:defaultValue="70"
+        android:defaultValue="70.0"
         android:key="your_weight"
         android:title="@string/your_weight"
-        android:inputType="number"
+        android:inputType="numberDecimal"
         android:singleLine="true"
         />
     <hu.balygaby.projects.cyclepower.overdefines.CustomEditTextPreference

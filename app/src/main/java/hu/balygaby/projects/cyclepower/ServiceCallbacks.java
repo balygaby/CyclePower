@@ -2,7 +2,7 @@ package hu.balygaby.projects.cyclepower;
 
 public interface ServiceCallbacks {
 
-    static enum ErrorList{WEATHER, ELEVATION, LOCATION, NETWORK, BLUETOOTH};
+    static enum ErrorList{WEATHER, ELEVATION, LOCATION, NETWORK, BLUETOOTH, DATABASE};
 
     /**
      * Fields to display on the activity screen.

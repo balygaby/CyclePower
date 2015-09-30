@@ -44,7 +44,8 @@ public interface AsyncResponse {
      * </p>
      * @param windSpeed The resulting wind speed in m/s. In the case of failure, the
      *                  value is 0.
-     * @param windAngle The resulting wind angle. In the case of failure, the
+     * @param windAngle The resulting wind angle in degrees when north is 0 deg.
+     *                  The angle indicates where FROM the wind blows. In the case of failure, the
      *                  value is 0.
      */
     void weatherProcessFinish(int processStatus, double windSpeed, double windAngle);

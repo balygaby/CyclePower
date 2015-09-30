@@ -8,9 +8,11 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -18,6 +20,11 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.sleepycat.je.DatabaseException;
+
+import hu.balygaby.projects.cyclepower.database.ByteConverter;
+import hu.balygaby.projects.cyclepower.database.ManageDb;
+import hu.balygaby.projects.cyclepower.database.objects.WorkoutEntry;
 import hu.balygaby.projects.cyclepower.settings.SettingsActivity;
 
 
@@ -68,6 +75,35 @@ public class MainActivity extends Activity implements ServiceCallbacks{
         tvLongitude = (TextView)findViewById(R.id.tv_longitude);
         tvErrors = (TextView)findViewById(R.id.tv_errors);
 
+        /*Log.d("debug","bytearray: "+ Arrays.toString(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+        Log.d("debug",""+ByteConverter.getDistanceFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+        Log.d("debug",""+ByteConverter.getWorkFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+        Log.d("debug",""+ByteConverter.getSpeedFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+        Log.d("debug", "" + ByteConverter.getCadenceFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+        Log.d("debug",""+ByteConverter.getPowerFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+        Log.d("debug",""+ByteConverter.getTorqueFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+        Log.d("debug",""+ByteConverter.getLatitudeFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+        Log.d("debug",""+ByteConverter.getLongitudeFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
+
+        long time = System.currentTimeMillis();
+        Log.d("debug",""+time);
+        Log.d("debug", "" + Arrays.toString(ByteConverter.convertKeyToByteArray(time)));
+        Log.d("debug",""+ ByteConverter.getTimeFromBytes(ByteConverter.convertKeyToByteArray(time)));
+
+        byte[] firstRecord = ByteConverter.convertFirstRecordHeaderToByteArray(new byte[0], System.currentTimeMillis());
+        Log.d("debug",""+ Arrays.toString(firstRecord));
+        firstRecord = ByteConverter.convertFirstRecordSummaryToByteArray(firstRecord, System.currentTimeMillis(),20000,30000);
+        Log.d("debug",""+ Arrays.toString(firstRecord));
+
+        Log.d("debug",""+ Arrays.toString(ByteConverter.getFirstRecordKey()));
+
+        Log.d("debug",""+ ByteConverter.getWorkoutsFromBytes(firstRecord).get(0).getStartTime());
+        Log.d("debug",""+ ByteConverter.getWorkoutsFromBytes(firstRecord).get(0).getEndTime());
+        Log.d("debug",""+ ByteConverter.getWorkoutsFromBytes(firstRecord).get(0).getDistance());
+        Log.d("debug",""+ ByteConverter.getWorkoutsFromBytes(firstRecord).get(0).getWork());
+        */
+
+
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         isServiceOn = sharedPreferences.getBoolean(KEY_IS_SERVICE_ON, false);
         if (isServiceOn){
@@ -103,7 +139,7 @@ public class MainActivity extends Activity implements ServiceCallbacks{
         LocationManager service = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         boolean enabled = service
                 .isProviderEnabled(LocationManager.GPS_PROVIDER);
-        if ((!isServiceOn) && (enabled)) {//start
+        if ((!isServiceOn) && (enabled)) {//S T A R T
             startService(serviceIntent); //Starting the service
             serviceIntent.removeExtra(INITIAL_LONGITUDE); serviceIntent.removeExtra(INITIAL_LATITUDE);
             bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE); //Binding to the service!
@@ -115,7 +151,7 @@ public class MainActivity extends Activity implements ServiceCallbacks{
             //if GPS is not enabled, we navigate to the GPS on screen in the device settings
             Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
             startActivity(intent);
-        }else {//stop
+        }else {//S T O P
             if (workoutService!=null) {
                 workoutService.stopCallbacks();
                 workoutService.unregisterClients();
@@ -125,6 +161,45 @@ public class MainActivity extends Activity implements ServiceCallbacks{
             bakeToast(getResources().getString(R.string.session_ended));
             isServiceOn = false; isServiceBound = false;
             btnStartWorkout.setText(getResources().getString(R.string.start_workout));
+
+            //<editor-fold desc="CLOSING WORKOUT IN DATABASE">
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {//delayed, so that the database instance in the service will be closed
+                @Override
+                public void run() {
+                    try {
+                        ManageDb manageDb = ManageDb.getInstance(MainActivity.this);
+                        manageDb.setupDb(false);
+                        //getting the summary data from the last entry record
+                        WorkoutEntry lastEntry;
+                        double wholeDistance = 0.0;
+                        double wholeWork = 0.0;
+                        try {
+                            lastEntry = manageDb.getLastEntry();
+                            if (lastEntry.getTimeInMillis() >= manageDb.getLastWorkout().getStartTime()) {//there's at least one entry in the workout
+                                wholeDistance = lastEntry.getDistance();
+                                wholeWork = lastEntry.getWork();
+                            }
+                        } catch (Exception e) {
+                            Log.d("MainActivity", "error getting last workout: " + e);
+                        }
+                        long currentTime = System.currentTimeMillis(); //There has to be one variable like this, so the following two database
+                        //writes will get the same ending time
+                        //writing summary + one ending record with the currentTime
+                        int status = manageDb.writeEntry(ByteConverter.convertKeyToByteArray(currentTime),ByteConverter.getClosingRecordData());
+                        if (status!=WorkoutService.DATABASE_OK)
+                            Log.d("MainActivity","Error writing closing entry "+status);
+                        status = manageDb.writeFirstRecordSummary(currentTime,wholeDistance,wholeWork);
+                        if (status!=WorkoutService.DATABASE_OK)
+                            Log.d("MainActivity","Error writing summary " + status);
+                        manageDb.closeDb();
+                    } catch (DatabaseException | IllegalArgumentException e) {
+                        Log.d("MainActivity","error closing workout in database");
+                    }
+                }
+            },500);//todo do we need this handler?
+
+            //</editor-fold>
         }
     }
 
@@ -170,7 +245,9 @@ public class MainActivity extends Activity implements ServiceCallbacks{
                 tvElevation.setText(data.getElevation() + " m");
                 tvLatitude.setText(data.getLatitude() + "");
                 tvLongitude.setText(data.getLongitude() +"");
-                tvErrors.setText(data.getErrors()[0]+";"+data.getErrors()[1]+";"+data.getErrors()[2]+";"+data.getErrors()[3]+";"+data.getErrors()[4]+";");
+                tvErrors.setText(data.getErrors()[0] + ";" + data.getErrors()[1] + ";" + data.getErrors()[2] + ";" + data.getErrors()[3] + ";" + data.getErrors()[4] + ";" + data.getErrors()[5]);
+
+                //todo register errors
             }
         });
     }

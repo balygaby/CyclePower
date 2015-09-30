@@ -2,7 +2,6 @@ package hu.balygaby.projects.cyclepower;
 
 import android.app.Activity;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -13,6 +12,8 @@ import android.preference.PreferenceManager;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
+import com.sleepycat.je.DatabaseException;
+
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -22,6 +23,10 @@ import hu.balygaby.projects.cyclepower.connectivity.LocationService;
 import hu.balygaby.projects.cyclepower.connectivity.internet_data.AsyncResponse;
 import hu.balygaby.projects.cyclepower.connectivity.internet_data.FetchElevationData;
 import hu.balygaby.projects.cyclepower.connectivity.internet_data.FetchWeatherData;
+import hu.balygaby.projects.cyclepower.database.ByteConverter;
+import hu.balygaby.projects.cyclepower.database.ManageDb;
+import hu.balygaby.projects.cyclepower.database.objects.WholeWorkout;
+import hu.balygaby.projects.cyclepower.database.objects.WorkoutEntry;
 
 public class WorkoutService extends Service implements AsyncResponse, InputData{
 
@@ -32,13 +37,39 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     private static final int NOTIFICATION_ID = 20152016;
     private static final int NETWORK_PROBLEM = 0;
     private static final int NETWORK_OK = 1;
-    private int bicycleWeight, yourWeight, wheelPerimeter;
+    private static final int NETWORK_TOO_SLOW = -1;
+    private static final int LOCATION_OK = 1;
+    private static final int BLUETOOTH_OK = 1;
+    public static final int DATABASE_OK = 1;
+    public static final int DATABASE_WRITE_PROBLEM = 0;
+    public static final int DATABASE_NULL = -1;
+    public static final int DATABASE_CLOSE_ERROR = -2;
+
+    private int wheelPerimeter;
+    private double bicycleWeight, yourWeight;
     private LocationService locationService;
     private double wheelRpm, cadence;
     /**
      * Speed in km/h.
      */
     private double speed;
+    /**
+     * Time of the {@link #speed} field.
+     */
+    private long timeOfSpeed;
+    /**
+     * The wheel rotation count at the start of the workout session. Distance calculation works
+     * with the increment from this variable.
+     */
+    private int startingWheelRotation;//todo
+    /**
+     * The distance at the time of an unexpected service restart.
+     */
+    private double startingDistance;
+    /**
+     * The work at the time of an unexpected service restart.
+     */
+    private double startingWork;
     /**
      * Starting time of the service to calculate elapsed time.
      */
@@ -73,7 +104,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
      * <p>3: Network</p>
      * <p>4: Bluetooth</p>
      */
-    private int errors[] = {RESULT_JSON_OK,RESULT_JSON_OK,1,NETWORK_OK,1};
+    private int errors[] = {RESULT_JSON_OK,RESULT_JSON_OK,LOCATION_OK,NETWORK_OK,BLUETOOTH_OK,DATABASE_OK};
     /**
      * Optimal Pace in km/h.
      */
@@ -94,6 +125,10 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
      * Steepness in %.
      */
     private double steepness;
+    /**
+     * Bearing in degrees (North is 0).
+     */
+    private double direction;
 
     private long startTime;
     /**
@@ -117,6 +152,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
      * Service callback interface.
      */
     private ServiceCallbacks workoutData;
+    private ManageDb manageDb;
     private final IBinder mBinder = new LocalBinder();
     //</editor-fold>
 
@@ -132,10 +168,10 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
         String sYourWeight = ""+sharedPreferences.getString(YOUR_WEIGHT, "70");
         String sWheelPerimeter = ""+sharedPreferences.getString(WHEEL_PERIMETER, "2133");
         if (sBicycleWeight.length() > 0 && !sBicycleWeight.equals("0")){
-            bicycleWeight = Integer.parseInt(sBicycleWeight);
+            bicycleWeight = Double.parseDouble(sBicycleWeight);
         }else {bicycleWeight = 8;}
         if (sYourWeight.length() > 0 && !sYourWeight.equals("0")){
-            yourWeight = Integer.parseInt(sYourWeight);
+            yourWeight = Double.parseDouble(sYourWeight);
         }else {bicycleWeight = 70;}
         if (sWheelPerimeter.length() > 0 && !sWheelPerimeter.equals("0")){
             wheelPerimeter = Integer.parseInt(sWheelPerimeter);
@@ -146,22 +182,11 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
         //</editor-fold>
 
         //<editor-fold desc="BUILDING NOTIFICATION">
-        Intent startMainIntent = new Intent(this, MainActivity.class);
-// Because clicking the notification opens a new ("special") activity, there's
-// no need to create an artificial back stack.
-        PendingIntent startMainPendingIntent =
-                PendingIntent.getActivity(
-                        this,
-                        0,
-                        startMainIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT
-                );
         NotificationCompat.Builder mBuilder =
                 new NotificationCompat.Builder(this)
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle(getResources().getString(R.string.app_name))
                         .setContentText(getResources().getString(R.string.session_on))
-                        .setContentIntent(startMainPendingIntent)
                         .setOngoing(true);
         int mNotificationId = NOTIFICATION_ID;
 // Gets an instance of the NotificationManager service
@@ -171,9 +196,37 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
         mNotifyMgr.notify(mNotificationId, mBuilder.build());
         //</editor-fold>
 
+        //<editor-fold desc="SETTING UP DATABASE">
+        manageDb = ManageDb.getInstance(this);
+        try {
+            manageDb.setupDb(false);
+            if (manageDb.isWorkoutInProgress()){//service restarted without user interaction
+                try {
+                    WholeWorkout lastWholeWorkout;
+                    lastWholeWorkout = manageDb.getLastWorkout();
+                    this.startTime = lastWholeWorkout.getStartTime();//other fields are then 0
+                    WorkoutEntry lastWorkoutEntry = manageDb.getLastEntry();
+                    this.distance = lastWorkoutEntry.getDistance();
+                    this.work = lastWorkoutEntry.getWork();
+                } catch (Exception e) {
+                    Log.d("WorkoutService","error getting last workout: "+e);
+                }
+                //the other fields are temporary (always changing), so are recovered in a second.
+            }else{
+                errors[ServiceCallbacks.ErrorList.NETWORK.ordinal()] =
+                        manageDb.writeFirstRecordHeader(System.currentTimeMillis());//new first record header;
+                //we can access the oncoming entries by moving the cursor to the record (with searchKeyRange), the time of
+                //which is closest to the start time, and is after the start time.
+            }
+        } catch (DatabaseException | IllegalArgumentException e) {
+            Log.d("WoroutService", "error setting up database: " + e);
+        }
+        //</editor-fold>
+
         startTimers();
         locationService = new LocationService(this);
         fetchElevationData = new FetchElevationData(this);
+
     }
 
     @Override
@@ -202,6 +255,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
         locationService.stopLocationUpdates();
         locationService.collapseGoogleApiClient();
         stopTimers();
+        errors[ServiceCallbacks.ErrorList.DATABASE.ordinal()] = manageDb.closeDb(); //close database
         super.onDestroy();
     }
     //</editor-fold>
@@ -284,11 +338,27 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
         timerTaskDoCalculations = new TimerTask() {
             @Override
             public void run() {
+                double latitude = 0; double longitude = 0;
+                if (location != null){ latitude = location.getLatitude(); longitude = location.getLongitude();}
                 //todo do calculations
+                errors[ServiceCallbacks.ErrorList.DATABASE.ordinal()] =
+                        manageDb.writeEntry(ByteConverter.convertKeyToByteArray(System.currentTimeMillis()),
+                                ByteConverter.convertDataToByteArray(distance, work, speed, cadence, power, torque, latitude, longitude));
+                if (errors[ServiceCallbacks.ErrorList.DATABASE.ordinal()] == DATABASE_NULL){//if it closes for some reason
+                    Log.d("WorkoutService","Database is null");
+                    manageDb = ManageDb.getInstance(WorkoutService.this);
+                    manageDb.closeDb();
+                    try {
+                        manageDb.setupDb(false);
+                        Log.d("WorkoutService", "Setting up closed db again");
+                    } catch (DatabaseException | IllegalArgumentException e) {
+                        Log.d("WorkoutService", "error setting up database: " + e);
+                    }
+                }
             }
         };
-        //calculations in every 250 ms
-        timerDoCalculations.schedule(timerTaskDoCalculations,1000,250);
+        //calculations in every 250 ms todo write back to 250 maybe
+        timerDoCalculations.schedule(timerTaskDoCalculations,1000,1000);
     }
 
     private void stopTimers(){
@@ -338,16 +408,21 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     //<editor-fold desc="INTERFACE CALLBACKS">
     @Override
     public void elevationProcessFinish(int processStatus, double elevation, double latitude, double longitude) {
-        //TODO see how recent the data are
         if (processStatus == RESULT_JSON_OK){
             this.elevation = elevation;
             Location elevationLocation = this.location;
             elevationLocation.setLatitude(latitude); elevationLocation.setLongitude(longitude);elevationLocation.setAltitude(elevation);
-            if (lastElevationLocation == null) {
+            if (lastElevationLocation == null) {//on first run avoid passing null
                 lastElevationLocation = this.location;
                 lastElevationLocation.setLatitude(latitude); lastElevationLocation.setLongitude(longitude);lastElevationLocation.setAltitude(elevation);
             }
-            this.steepness = BasicCalculations.calculateSteepness(elevationLocation, lastElevationLocation);
+            if (elevationLocation.distanceTo(this.location)>50){//too old data
+                this.steepness = 0;
+                this.errors[ServiceCallbacks.ErrorList.NETWORK.ordinal()] = NETWORK_TOO_SLOW;
+            }else {
+                this.steepness = BasicCalculations.calculateSteepness(elevationLocation, lastElevationLocation);
+                this.errors[ServiceCallbacks.ErrorList.NETWORK.ordinal()] = NETWORK_OK;
+            }
             lastElevationLocation = elevationLocation;
         }
         errors[ServiceCallbacks.ErrorList.ELEVATION.ordinal()] = processStatus;
@@ -365,7 +440,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     }
 
     @Override
-    public void transmitBicycleData(int validity, double wheelRpm, double pedalRpm) {
+    public void transmitBicycleData(int validity, double wheelRpm, double pedalRpm, double wheelRotation) {
         //TODO
     }
 
@@ -374,15 +449,20 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
         if (validity == InputData.INPUT_VALID) {
             lastLocation = this.location;
             this.location = location;
-            Log.d("service","new location");
-            //TODO check validity
-            //todo in the timer see how recent the location object is
             //getting elevation for the new location
             if (fetchElevationData != null){
-                fetchElevationData.requestElevationData(location.getLatitude(),location.getLongitude());
+                 boolean isNetworkOk = fetchElevationData.requestElevationData(location.getLatitude(),location.getLongitude());
+                if (!isNetworkOk) {
+                    errors[ServiceCallbacks.ErrorList.NETWORK.ordinal()] = NETWORK_PROBLEM;
+                } else {
+                    errors[ServiceCallbacks.ErrorList.NETWORK.ordinal()] = NETWORK_OK;
+                }
             }
-            //todo bearing
+            this.direction = BasicCalculations.calculateDirection(this.location, this.lastLocation);
+            Log.d("service", "new location, direction: " + this.direction);
         }
+        //There cannot be any problems with the location, besides when it comes not frequently enough.
+        //But also then we cannot really do anything, but use the new location when it arrives.
         errors[ServiceCallbacks.ErrorList.LOCATION.ordinal()] = validity;
 
     }
