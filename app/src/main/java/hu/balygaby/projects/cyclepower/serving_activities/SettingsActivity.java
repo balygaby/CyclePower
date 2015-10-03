@@ -1,4 +1,4 @@
-package hu.balygaby.projects.cyclepower.settings;
+package hu.balygaby.projects.cyclepower.serving_activities;
 
 import android.os.Bundle;
 import android.preference.PreferenceActivity;

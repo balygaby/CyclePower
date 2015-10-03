@@ -33,4 +33,20 @@
     <string name="latitude">Latitude</string>
     <string name="longitude">Longitude</string>
     <string name="errors">Errors</string>
+    <string name="browse_workouts">Browse workouts</string>
+    <string name="stop_workout_in_progress">A workout is in progress. Stop it to see previous workouts.</string>
+    <string name="yes">Yes</string>
+    <string name="cancel">Cancel</string>
+    <string name="warning">Warning</string>
+    <string name="session_on_quit">Do you really want to finish the ongoing session?</string>
+    <string name="title_workout_list">Workouts</string>
+    <string name="title_workout_detail">Workout Detail</string>
+    <string name="title_activity_workouts_overview">WorkoutsOverviewActivity</string>
+    <string name="title_activity_workout_detail">WorkoutDetailActivity</string>
+    <string name="kilometre">km</string>
+    <string name="joule">J</string>
+    <string name="workout_database_in_use">Workout database currently in use</string>
+    <string name="error_getting_workouts">Error getting workouts</string>
+    <string name="error_accessing_database">Error accessing database</string>
+    <string name="dummy">Dummy</string>
 </resources>

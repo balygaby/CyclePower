@@ -18,6 +18,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import hu.balygaby.projects.cyclepower.calculation.BasicCalculations;
+import hu.balygaby.projects.cyclepower.calculation.CalculateDynamics;
 import hu.balygaby.projects.cyclepower.connectivity.InputData;
 import hu.balygaby.projects.cyclepower.connectivity.LocationService;
 import hu.balygaby.projects.cyclepower.connectivity.internet_data.AsyncResponse;
@@ -44,6 +45,9 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     public static final int DATABASE_WRITE_PROBLEM = 0;
     public static final int DATABASE_NULL = -1;
     public static final int DATABASE_CLOSE_ERROR = -2;
+    private static final long PERIOD_OF_WEATHER_QUERY = 120000;
+    public static final long PERIOD_OF_CALCULATION = 1000;
+    private static final long PERIOD_OF_DATABASE = 1000;
 
     private int wheelPerimeter;
     private double bicycleWeight, yourWeight;
@@ -61,7 +65,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
      * The wheel rotation count at the start of the workout session. Distance calculation works
      * with the increment from this variable.
      */
-    private int startingWheelRotation;//todo
+    private long startingWheelRotation;//todo
     /**
      * The distance at the time of an unexpected service restart.
      */
@@ -89,7 +93,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     /**
      * Work in J.
      */
-    private double work;
+    private double work = 0;
     /**
      * Torque in Nm.
      */
@@ -134,18 +138,10 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     /**
      * Updating activity user interface.
      */
-    private Timer timerActivityConnection;
-    private TimerTask timerTaskActivityConnection;
-    /**
-     * Getting weather data.
-     */
-    private Timer timerFetchData;
-    private TimerTask timerTaskFetchData;
-    /**
-     * Doing the calculations.
-     */
-    private Timer timerDoCalculations;
-    private TimerTask timerTaskDoCalculations;
+    private static Timer timerActivityConnection;
+    private static TimerTask timerTaskActivityConnection;
+    private static Timer timer;
+    private static TimerTask timerTaskFetchData,timerTaskDoCalculations,timerTaskWriteDatabase;
     private FetchElevationData fetchElevationData;
     //TODO timer for watch connection
     /**
@@ -206,20 +202,21 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
                     lastWholeWorkout = manageDb.getLastWorkout();
                     this.startTime = lastWholeWorkout.getStartTime();//other fields are then 0
                     WorkoutEntry lastWorkoutEntry = manageDb.getLastEntry();
-                    this.distance = lastWorkoutEntry.getDistance();
-                    this.work = lastWorkoutEntry.getWork();
+                    this.startingDistance = lastWorkoutEntry.getDistance();
+                    this.startingWork = lastWorkoutEntry.getWork();
                 } catch (Exception e) {
                     Log.d("WorkoutService","error getting last workout: "+e);
                 }
                 //the other fields are temporary (always changing), so are recovered in a second.
             }else{
+                startTime = System.currentTimeMillis();
                 errors[ServiceCallbacks.ErrorList.NETWORK.ordinal()] =
-                        manageDb.writeFirstRecordHeader(System.currentTimeMillis());//new first record header;
+                        manageDb.writeFirstRecordHeader(startTime);//new first record header;
                 //we can access the oncoming entries by moving the cursor to the record (with searchKeyRange), the time of
                 //which is closest to the start time, and is after the start time.
             }
         } catch (DatabaseException | IllegalArgumentException e) {
-            Log.d("WoroutService", "error setting up database: " + e);
+            Log.d("WorkoutService", "error setting up database: " + e);
         }
         //</editor-fold>
 
@@ -302,8 +299,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     //<editor-fold desc="TIMER">
 
     private void startTimers() {
-        startTime = System.currentTimeMillis();
-        timerFetchData = new Timer();
+        timer = new Timer();
         timerTaskFetchData = new TimerTask() {
             @Override
             public void run() {
@@ -332,18 +328,29 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
             }
         };
         //getting weather data every 2 minutes; starting from 1 second after service start, so to get location
-        timerFetchData.schedule(timerTaskFetchData,500,120000);
+        timer.schedule(timerTaskFetchData,500,PERIOD_OF_WEATHER_QUERY);
 
-        timerDoCalculations = new Timer();
         timerTaskDoCalculations = new TimerTask() {
+            @Override
+            public void run() {
+                //todo do calculations
+                double totalResistance = CalculateDynamics.calculateTotalResistance(speed, direction, windSpeed, windAngle, bicycleWeight, yourWeight, steepness, acceleration);
+                power = CalculateDynamics.calculatePower(speed, totalResistance);
+                torque = CalculateDynamics.calculateTorque(cadence, totalResistance, wheelPerimeter, gearRatio);
+                work += BasicCalculations.calculateWorkIncrement(power);
+            }
+        };
+        //calculations in every 250 ms todo write back to 250 maybe
+        timer.schedule(timerTaskDoCalculations,500,PERIOD_OF_CALCULATION);
+
+        timerTaskWriteDatabase = new TimerTask() {
             @Override
             public void run() {
                 double latitude = 0; double longitude = 0;
                 if (location != null){ latitude = location.getLatitude(); longitude = location.getLongitude();}
-                //todo do calculations
                 errors[ServiceCallbacks.ErrorList.DATABASE.ordinal()] =
                         manageDb.writeEntry(ByteConverter.convertKeyToByteArray(System.currentTimeMillis()),
-                                ByteConverter.convertDataToByteArray(distance, work, speed, cadence, power, torque, latitude, longitude));
+                                ByteConverter.convertDataToByteArray(distance, work + startingWork, speed, cadence, power, torque, latitude, longitude));
                 if (errors[ServiceCallbacks.ErrorList.DATABASE.ordinal()] == DATABASE_NULL){//if it closes for some reason
                     Log.d("WorkoutService","Database is null");
                     manageDb = ManageDb.getInstance(WorkoutService.this);
@@ -357,20 +364,16 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
                 }
             }
         };
-        //calculations in every 250 ms todo write back to 250 maybe
-        timerDoCalculations.schedule(timerTaskDoCalculations,1000,1000);
+        timer.schedule(timerTaskWriteDatabase,500,PERIOD_OF_DATABASE);
     }
 
     private void stopTimers(){
         if (timerTaskFetchData != null) timerTaskFetchData.cancel();
-        if (timerFetchData != null){
-            timerFetchData.cancel();
-            timerFetchData.purge();
-        }
         if (timerTaskDoCalculations != null) timerTaskDoCalculations.cancel();
-        if (timerDoCalculations != null){
-            timerDoCalculations.cancel();
-            timerDoCalculations.purge();
+        if (timerTaskWriteDatabase != null) timerTaskWriteDatabase.cancel();
+        if (timer != null){
+            timer.cancel();
+            timer.purge();
         }
     }
 
@@ -386,7 +389,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
                 double longitude = 0.0, latitude = 0.0;
                 if (location != null){longitude = location.getLongitude(); latitude = location.getLatitude();}
                 ServiceCallbacks.DisplayData displayData =
-                        new ServiceCallbacks.DisplayData(time, speed, cadence, gearRatio, acceleration, distance, power, work, torque, latitude, longitude, elevation, steepness, errors);
+                        new ServiceCallbacks.DisplayData(time, speed, cadence, gearRatio, acceleration, distance, power, work + startingWork, torque, latitude, longitude, elevation, steepness, errors);
                 //unregisterClients wasn't called
                 if (workoutData != null) workoutData.transmitBasicData(displayData);
             }
@@ -440,8 +443,21 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     }
 
     @Override
-    public void transmitBicycleData(int validity, double wheelRpm, double pedalRpm, double wheelRotation) {
+    public void transmitBicycleData(int validity, double wheelRpm, double pedalRpm, long wheelRotation) {
         //TODO
+        if (startingWheelRotation == 0) startingWheelRotation = wheelRotation; //assigning a value when the service starts;
+        // since wheelRotation only increases, the service start is the only point when startingWheelRotation can be 0
+
+        long currentTime = System.currentTimeMillis();
+        double currentSpeed = BasicCalculations.calculateSpeed(wheelRpm,wheelPerimeter);
+        this.acceleration = BasicCalculations.calculateAcceleration(currentTime, currentSpeed, timeOfSpeed, speed);
+        this.speed = currentSpeed;
+        this.timeOfSpeed = currentTime;
+        this.gearRatio = BasicCalculations.calculateGearRatio(wheelRpm, pedalRpm);
+        this.wheelRpm = wheelRpm;
+        this.cadence = pedalRpm;
+        this.distance = BasicCalculations.calculateDistance(this.startingDistance, this.startingWheelRotation, wheelRotation, wheelPerimeter);
+
     }
 
     @Override

@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="hu.balygaby.projects.cyclepower" >
+
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -22,12 +24,28 @@
         <service android:name=".WorkoutService" />
 
         <activity
-            android:name=".settings.SettingsActivity"
+            android:name=".serving_activities.SettingsActivity"
             android:label="@string/title_activity_settings"
             android:parentActivityName=".MainActivity" >
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="hu.balygaby.projects.cyclepower.MainActivity" />
+        </activity>
+        <activity
+            android:name=".serving_activities.WorkoutsOverviewActivity"
+            android:label="@string/title_activity_workouts_overview"
+            android:parentActivityName=".MainActivity" >
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="hu.balygaby.projects.cyclepower.MainActivity" />
+        </activity>
+        <activity
+            android:name=".serving_activities.WorkoutDetailActivity"
+            android:label="@string/title_activity_workout_detail"
+            android:parentActivityName=".serving_activities.WorkoutsOverviewActivity" >
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="hu.balygaby.projects.cyclepower.serving_activities.WorkoutsOverviewActivity" />
         </activity>
     </application>
 

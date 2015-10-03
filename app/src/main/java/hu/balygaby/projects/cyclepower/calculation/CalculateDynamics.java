@@ -39,13 +39,75 @@ public class CalculateDynamics {
         return ROLLING_RESISTANCE_CONSTANT * GRAVITATIONAL_ACCELERATION * (yourWeight + bicycleWeight);
     }
 
-    public static void calculateClimbResistance(){
-        //TODO
+    /**
+     * Calculates the climb resistance force.
+     * @param bicycleWeight Rider weight in kg.
+     * @param yourWeight Bicycle weight in kg.
+     * @param steepness Slope steepness in %.
+     * @return The resistance force in Newtons.
+     */
+    public static double calculateClimbResistance(double bicycleWeight, double yourWeight, double steepness){
+        //steepness is in % gradient, tg(x) by value - x is the slope angle
+        //we need sin(x) for the formula F = M*g*sin(x)
+        //sin(x) = tg(x) * sqrt(1 / ((tg(x))^2 + 1) )
+        double tangentOfSlope = steepness / 100;
+        double sineOfSlope = tangentOfSlope * Math.sqrt(1 / (Math.pow(tangentOfSlope,2) + 1) );
+        return (bicycleWeight + yourWeight) * GRAVITATIONAL_ACCELERATION * sineOfSlope;
     }
-    public static void calculateInertialResistance(){
-        //TODO
+
+    /**
+     * Calculates the inertial resistance.
+     * @param bicycleWeight Bicycle weight in kg.
+     * @param yourWeight Rider weight in kg.
+     * @param acceleration Bicycle acceleration is m/s/s.
+     * @return The resistance force in N.
+     */
+    public static double calculateInertialResistance(double bicycleWeight, double yourWeight, double acceleration){
+        return acceleration * (bicycleWeight + yourWeight);
     }
-    public static void calculateWork(double startingWork){
-        //TODO
+
+    /**
+     * Calculates the total resistance. Pass the result to the {@link #calculatePower(double, double)} )} method.
+     * @param speed Bicycle speed in km/h.
+     * @param direction Bicycle heading direction in degrees, when north is 0.
+     * @param windSpeed Wind speed in km/h.
+     * @param windAngle Wind source direction in degrees, when north is 0.
+     * @param bicycleWeight Rider weight in kg.
+     * @param yourWeight Bicycle weight in kg.
+     * @param steepness Slope steepness in %.
+     * @param acceleration Bicycle acceleration is m/s/s.
+     * @return Total resistance in Newtons.
+     */
+    public static double calculateTotalResistance(double speed, double direction, double windSpeed, double windAngle,
+                                                  double bicycleWeight, double yourWeight,
+                                                  double steepness,
+                                                  double acceleration){
+        return calculateAirDrag(speed, direction, windSpeed, windAngle)+
+                calculateRollingResistance(bicycleWeight, yourWeight)+
+                calculateClimbResistance(bicycleWeight, yourWeight, steepness)+
+                calculateInertialResistance(bicycleWeight, yourWeight, acceleration);
+    }
+
+    /**
+     * Calculates power from resistance forces.
+     * @param speed Current bicycle speed in km/h.
+     * @param totalResistance The total of resistance forces acting on the bicycle in Newtons.
+     * @return The current drive power in Watts.
+     */
+    public static double calculatePower(double speed, double totalResistance){
+        return speed/*km/h*/ / 3.6 * totalResistance/*N*/;
+    }
+
+    /**
+     * Calculates the current torque.
+     * @param cadence Pedal rpm.
+     * @param totalResistance The total of resistance forces acting on the bicycle in Newtons.
+     * @param wheelPerimeter Perimeter in mm.
+     * @param gearRatio Gear ratio, wheel rpm / pedal rpm.
+     * @return The current torque in Nm.
+     */
+    public static double calculateTorque(double cadence, double totalResistance, double wheelPerimeter, double gearRatio){
+        //M1 = i * F * K / (2pi)
+        return totalResistance/*N*/ * wheelPerimeter/*mm*/ / 1000 * gearRatio / 2 / Math.PI;
     }
 }

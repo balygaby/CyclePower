@@ -65,7 +65,8 @@ public class ManageDb {
         envConfig.setReadOnly(readOnly);
         File root = context.getExternalFilesDir(null);
         File directory = new File(root + "/Berkeley");
-        if (!directory.exists()) directory.mkdir();
+        if (!directory.exists()) //noinspection ResultOfMethodCallIgnored
+            directory.mkdir();
         dbEnvironment = new Environment(directory,
                 envConfig);
         // Open the database. Create it if it does not already exist.
@@ -86,12 +87,15 @@ public class ManageDb {
         try {
             if (dbCursor != null) {
                 dbCursor.close();
+                dbCursor = null;
             }
             if (workoutDatabase != null) {
                 workoutDatabase.close();
+                workoutDatabase = null;
             }
             if (dbEnvironment != null) {
                 dbEnvironment.close();
+                dbEnvironment = null;
             }
             Log.d("ManageDb","Database closed");
             return WorkoutService.DATABASE_OK;
@@ -258,7 +262,7 @@ public class ManageDb {
      * @return The last {@link WholeWorkout} object.
      */
     public WholeWorkout getLastWorkout() throws Exception{
-        ArrayList<WholeWorkout> wholeWorkouts = getWorkouts();
+        ArrayList<WholeWorkout> wholeWorkouts = this.getWorkouts();
         return wholeWorkouts.get(wholeWorkouts.size()-1);
     }
 
@@ -270,7 +274,7 @@ public class ManageDb {
      * @param workoutEnd End time of the workout in milliseconds.
      * @return The specific workout.
      */
-    public ArrayList<WorkoutEntry> readWorkout(long workoutStart, long workoutEnd) throws Exception {
+    public ArrayList<WorkoutEntry> readWorkouts(long workoutStart, long workoutEnd) throws Exception {
         ArrayList<WorkoutEntry> workoutEntries = new ArrayList<>();
         if ((dbEnvironment != null) && (workoutDatabase != null)) {
             try {
@@ -360,7 +364,7 @@ public class ManageDb {
     }
     //</editor-fold>
 
-    //<editor-fold desc="DATA PROCESSING">
+    //<editor-fold desc="STATUS GETTER METHODS">
 
     /**
      * Is a workout in progress. Call this on the service onCreate.
@@ -374,6 +378,15 @@ public class ManageDb {
             return false;
         }
         return wholeWorkouts.size() != 0 && wholeWorkouts.get(wholeWorkouts.size() - 1).getEndTime() == 0;//not ended yet, nothing in endTime!
+    }
+
+    public boolean isDatabaseSet(){//todo test this method, then use it
+        try {
+            if (workoutDatabase.getEnvironment() != null) return true;
+        } catch (Exception e) {
+            Log.d("ManageDb", "No database available when requesting isDatabaseSet");
+        }
+        return false;
     }
     //</editor-fold>
 }

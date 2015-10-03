@@ -3,15 +3,18 @@ package hu.balygaby.projects.cyclepower.calculation;
 
 import android.location.Location;
 
+import hu.balygaby.projects.cyclepower.WorkoutService;
+
 public class BasicCalculations {
 
     /**
      * Calculates gear ratio,
      * @param wheelRpm Speed in km/h.
      * @param pedalRpm Cadence in rpm.
-     * @return Gear ratio.
+     * @return Gear ratio. If the cadence is 0, return is 0.
      */
     public static double calculateGearRatio(double wheelRpm, double pedalRpm){
+        if (pedalRpm == 0) return 0;
         return wheelRpm / pedalRpm;
     }
 
@@ -22,6 +25,7 @@ public class BasicCalculations {
      * @return Speed in km/h.
      */
     public static double calculateSpeed(double wheelRpm, int wheelPerimeter){
+        //v=P*n
         return (wheelRpm / 60) * ((double)wheelPerimeter) / 1000 * 3.6;
     }
 
@@ -33,7 +37,7 @@ public class BasicCalculations {
      * @param wheelPerimeter Wheel perimeter specified in shared preferences.
      * @return Distance from the session start in meters.
      */
-    public static double calculateDistance(double startingDistance, int startingWheelRotation, int wheelRotation, int wheelPerimeter){
+    public static double calculateDistance(double startingDistance, long startingWheelRotation, long wheelRotation, int wheelPerimeter){
         return ((double) (wheelRotation - startingWheelRotation)) * ((double) wheelPerimeter) / 1000 + startingDistance;
     }
 
@@ -94,5 +98,15 @@ public class BasicCalculations {
         if (distance == 0) return 0;
         double elevationDifference = elevationLocation.getAltitude() - lastElevationLocation.getAltitude();
         return elevationDifference / distance * 100;
+    }
+
+
+    /**
+     * Calculates the work increment from the service onCreate.
+     * @param power Current power in W.
+     * @return The new value.
+     */
+    public static double calculateWorkIncrement(double power){
+        return power * WorkoutService.PERIOD_OF_CALCULATION/*ms*/ / 1000;
     }
 }

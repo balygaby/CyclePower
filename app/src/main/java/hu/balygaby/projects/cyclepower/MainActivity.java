@@ -25,7 +25,8 @@ import com.sleepycat.je.DatabaseException;
 import hu.balygaby.projects.cyclepower.database.ByteConverter;
 import hu.balygaby.projects.cyclepower.database.ManageDb;
 import hu.balygaby.projects.cyclepower.database.objects.WorkoutEntry;
-import hu.balygaby.projects.cyclepower.settings.SettingsActivity;
+import hu.balygaby.projects.cyclepower.serving_activities.SettingsActivity;
+import hu.balygaby.projects.cyclepower.serving_activities.WorkoutsOverviewActivity;
 
 
 public class MainActivity extends Activity implements ServiceCallbacks{
@@ -152,6 +153,7 @@ public class MainActivity extends Activity implements ServiceCallbacks{
             Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
             startActivity(intent);
         }else {//S T O P
+
             if (workoutService!=null) {
                 workoutService.stopCallbacks();
                 workoutService.unregisterClients();
@@ -198,6 +200,8 @@ public class MainActivity extends Activity implements ServiceCallbacks{
                     }
                 }
             },500);//todo do we need this handler?
+            //todo retry if failed
+            //todo isdatabaseset query beforehand
 
             //</editor-fold>
         }
@@ -271,6 +275,13 @@ public class MainActivity extends Activity implements ServiceCallbacks{
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
             startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            return true;
+        }else if (id == R.id.action_browse_workouts){
+            if (isServiceOn){
+                bakeToast(getResources().getString(R.string.stop_workout_in_progress));
+                return true;
+            }
+            startActivity(new Intent(MainActivity.this, WorkoutsOverviewActivity.class));
             return true;
         }
 
