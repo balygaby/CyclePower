@@ -19,9 +19,8 @@ import java.util.TimerTask;
 
 import hu.balygaby.projects.cyclepower.calculation.BasicCalculations;
 import hu.balygaby.projects.cyclepower.calculation.CalculateDynamics;
-import hu.balygaby.projects.cyclepower.connectivity.InputData;
+import hu.balygaby.projects.cyclepower.connectivity.BluetoothService;
 import hu.balygaby.projects.cyclepower.connectivity.LocationService;
-import hu.balygaby.projects.cyclepower.connectivity.internet_data.AsyncResponse;
 import hu.balygaby.projects.cyclepower.connectivity.internet_data.FetchElevationData;
 import hu.balygaby.projects.cyclepower.connectivity.internet_data.FetchWeatherData;
 import hu.balygaby.projects.cyclepower.database.ByteConverter;
@@ -29,7 +28,8 @@ import hu.balygaby.projects.cyclepower.database.ManageDb;
 import hu.balygaby.projects.cyclepower.database.objects.WholeWorkout;
 import hu.balygaby.projects.cyclepower.database.objects.WorkoutEntry;
 
-public class WorkoutService extends Service implements AsyncResponse, InputData{
+public class WorkoutService extends Service implements FetchElevationData.AsyncResponse, FetchWeatherData.AsyncResponse,
+        BluetoothService.InputData, LocationService.InputData {
 
     //<editor-fold desc="FIELDS">
     private static final String BICYCLE_WEIGHT = "bicycle_weight";
@@ -39,8 +39,16 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
     private static final int NETWORK_PROBLEM = 0;
     private static final int NETWORK_OK = 1;
     private static final int NETWORK_TOO_SLOW = -1;
-    private static final int LOCATION_OK = 1;
-    private static final int BLUETOOTH_OK = 1;
+    public static final int RESULT_HTTP_FAILURE = -10;
+    public static final int RESULT_INVALID_JSON = -1;
+    public static final int RESULT_WEATHER_NOT_OK = -3;
+    public static final int RESULT_ELEVATION_NOT_OK = -2;
+    public static final int RESULT_DIRECTIONS_NOT_OK = -5;
+    public static final int RESULT_NO_DIRECTIONS = -6;
+    public static final int RESULT_JSON_OK = 1;
+    public static final int AWAITING_DATA_REQUEST = 0;
+    public static final int LOCATION_OK = 1;
+    public static final int BLUETOOTH_OK = 1;
     public static final int DATABASE_OK = 1;
     public static final int DATABASE_WRITE_PROBLEM = 0;
     public static final int DATABASE_NULL = -1;
@@ -462,7 +470,7 @@ public class WorkoutService extends Service implements AsyncResponse, InputData{
 
     @Override
     public void transmitLocationData(int validity, Location location) {
-        if (validity == InputData.INPUT_VALID) {
+        if (validity == LOCATION_OK) {
             lastLocation = this.location;
             this.location = location;
             //getting elevation for the new location

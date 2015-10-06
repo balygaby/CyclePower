@@ -50,7 +50,7 @@ public class FetchWeatherData {
 
     /**
      * See {@link FetchWeatherData}.
-     * @param workoutService Workoutservice instance.
+     * @param workoutService WorkoutService instance.
      */
     public FetchWeatherData(WorkoutService workoutService) {
         this.workoutService = workoutService;
@@ -69,7 +69,7 @@ public class FetchWeatherData {
      * @return      the network availability
      */
     public boolean requestWeatherData(double latitude, double longitude){
-        processStatus = AsyncResponse.AWAITING_DATA_REQUEST;
+        processStatus = WorkoutService.AWAITING_DATA_REQUEST;
         String stringUrl = String.format(Locale.ENGLISH,OPEN_WEATHER_MAP_API, latitude, longitude, WEATHER_API_KEY);
         ConnectivityManager connMgr = (ConnectivityManager)
                 workoutService.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -84,17 +84,17 @@ public class FetchWeatherData {
 
     private int processRawWeatherData(String result){
         this.windSpeed = 0.0; this.windAngle = 0.0;
-        if (result.length() == 0 || result.equals(HTTP_FAILURE)) return AsyncResponse.RESULT_HTTP_FAILURE;
+        if (result.length() == 0 || result.equals(HTTP_FAILURE)) return WorkoutService.RESULT_HTTP_FAILURE;
         JSONObject weatherJSON;
         try {
             weatherJSON = new JSONObject(result);
-            if (weatherJSON.getInt(KEY_COD) != COD_OK) return AsyncResponse.RESULT_WEATHER_NOT_OK;
+            if (weatherJSON.getInt(KEY_COD) != COD_OK) return WorkoutService.RESULT_WEATHER_NOT_OK;
             this.windSpeed = weatherJSON.getJSONObject(KEY_WIND).getDouble(KEY_SPEED);
             this.windAngle = weatherJSON.getJSONObject(KEY_WIND).getInt(KEY_DEG);
         } catch (JSONException e) {
-            return AsyncResponse.RESULT_INVALID_JSON;
+            return WorkoutService.RESULT_INVALID_JSON;
         }
-        return AsyncResponse.RESULT_JSON_OK;
+        return WorkoutService.RESULT_JSON_OK;
     }
 
     private class HttpTask extends AsyncTask<String, Void, String> {
@@ -156,5 +156,30 @@ public class FetchWeatherData {
         char[] buffer = new char[len];
         reader.read(buffer);
         return new String(buffer);
+    }
+
+
+    public interface AsyncResponse {
+
+        /**
+         * Callback when the weather request is finished and the wind values
+         * are fetched.
+         * @param processStatus Result of the http request and the JSON processing.
+         * <p>
+         *     Elevation is only valid, if the status is {@link WorkoutService#RESULT_JSON_OK}.
+         *                      Possible values:
+         *                      <br>{@link WorkoutService#AWAITING_DATA_REQUEST}
+         *                      <br>{@link WorkoutService#RESULT_JSON_OK}
+         *                      <br>{@link WorkoutService#RESULT_HTTP_FAILURE}
+         *                      <br>{@link WorkoutService#RESULT_INVALID_JSON}
+         *                      <br>{@link WorkoutService#RESULT_WEATHER_NOT_OK}
+         * </p>
+         * @param windSpeed The resulting wind speed in m/s. In the case of failure, the
+         *                  value is 0.
+         * @param windAngle The resulting wind angle in degrees when north is 0 deg.
+         *                  The angle indicates where FROM the wind blows. In the case of failure, the
+         *                  value is 0.
+         */
+        void weatherProcessFinish(int processStatus, double windSpeed, double windAngle);
     }
 }

@@ -65,8 +65,8 @@ public class ManageDb {
         envConfig.setReadOnly(readOnly);
         File root = context.getExternalFilesDir(null);
         File directory = new File(root + "/Berkeley");
-        if (!directory.exists()) //noinspection ResultOfMethodCallIgnored
-            directory.mkdir();
+        //noinspection ResultOfMethodCallIgnored
+        directory.mkdir();
         dbEnvironment = new Environment(directory,
                 envConfig);
         // Open the database. Create it if it does not already exist.
@@ -298,26 +298,32 @@ public class ManageDb {
                     byte[] keyBytes = foundKey.getData();
                     byte[] dataBytes = foundData.getData();
 
-                    if (Arrays.equals(keyBytes,ByteConverter.convertKeyToByteArray(workoutEnd))) break; //when we reach the start of the next workout, it's the end
-                    //todo when filling out the header in the main activity at the end of the session, insert a record to the end, with the same key as the specified endTime of the workout
+                    if (ByteConverter.getTimeFromBytes(keyBytes)>=workoutEnd) break;//todo compare byte arrays
+                   // if (Arrays.equals(keyBytes,ByteConverter.convertKeyToByteArray(workoutEnd))) break; //when we reach the start of the next workout, it's the end
                     //adding record to the entry array right away
-                    workoutEntries.add(new WorkoutEntry(ByteConverter.getTimeFromBytes(keyBytes),
-                            ByteConverter.getDistanceFromBytes(dataBytes),
-                            ByteConverter.getWorkFromBytes(dataBytes),
-                            ByteConverter.getSpeedFromBytes(dataBytes),
-                            ByteConverter.getCadenceFromBytes(dataBytes),
-                            ByteConverter.getPowerFromBytes(dataBytes),
-                            ByteConverter.getTorqueFromBytes(dataBytes),
-                            ByteConverter.getLatitudeFromBytes(dataBytes),
-                            ByteConverter.getLongitudeFromBytes(dataBytes)));
+                    else {
+                        workoutEntries.add(new WorkoutEntry(ByteConverter.getTimeFromBytes(keyBytes),
+                                ByteConverter.getDistanceFromBytes(dataBytes),
+                                ByteConverter.getWorkFromBytes(dataBytes),
+                                ByteConverter.getSpeedFromBytes(dataBytes),
+                                ByteConverter.getCadenceFromBytes(dataBytes),
+                                ByteConverter.getPowerFromBytes(dataBytes),
+                                ByteConverter.getTorqueFromBytes(dataBytes),
+                                ByteConverter.getLatitudeFromBytes(dataBytes),
+                                ByteConverter.getLongitudeFromBytes(dataBytes)));
+                    }
                 }
             } catch (DatabaseException de) {
                 Log.d("ManageDb","Error accessing database." + de);
                 throw de;
             } finally {
                 // Cursors must be closed.
-                dbCursor.close();
-            }//todo exceptions etc
+                try {
+                    dbCursor.close();
+                } catch (DatabaseException e) {
+                    Log.d("ManageDb", "Couldn't close cursor" + e);
+                }
+            }
         }
         return workoutEntries;
     }

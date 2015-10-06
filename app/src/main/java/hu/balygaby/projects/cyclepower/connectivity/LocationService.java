@@ -1,5 +1,6 @@
 package hu.balygaby.projects.cyclepower.connectivity;
 
+import android.content.Context;
 import android.location.Location;
 import android.os.Bundle;
 import android.widget.Toast;
@@ -10,6 +11,7 @@ import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 
+import hu.balygaby.projects.cyclepower.MainActivity;
 import hu.balygaby.projects.cyclepower.R;
 import hu.balygaby.projects.cyclepower.WorkoutService;
 
@@ -26,6 +28,8 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
     private boolean hasNoticedNoLocation = false;
     private GoogleApiClient mGoogleApiClient;
     WorkoutService workoutService;
+    MainActivity mainActivity;
+    Context context;
 
     /**
      * See {@link LocationService}
@@ -33,11 +37,17 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
      */
     public LocationService(WorkoutService workoutService) {
         this.workoutService = workoutService;
+        this.context = workoutService.getBaseContext();
         buildGoogleApiClient();//set up connection
     }
 
+    public LocationService(MainActivity mainActivity){
+        this.mainActivity = mainActivity;
+        this.context = mainActivity.getBaseContext();
+    }
+
     protected synchronized void buildGoogleApiClient() {//runs automatically on startup
-        mGoogleApiClient = new GoogleApiClient.Builder(workoutService)
+        mGoogleApiClient = new GoogleApiClient.Builder(context)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .addApi(LocationServices.API)
@@ -49,16 +59,19 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
         if (mGoogleApiClient.isConnected()) mGoogleApiClient.disconnect();
     }
 
-    //todo call stopUpdates and collapse
-
     @Override
     public void onConnected(Bundle connectionHint) {//callback from connecting
-        Location lastLocation = LocationServices.FusedLocationApi.getLastLocation(
-                mGoogleApiClient);
-        startLocationUpdates();
-        if (isReconnecting) {
-            bakeToast(workoutService.getResources().getString(R.string.reconnected));
-            isReconnecting = false;
+        if (mainActivity !=null) {
+            Location lastLocation = LocationServices.FusedLocationApi.getLastLocation(
+                    mGoogleApiClient);
+            LastLocationData lastLocationData = mainActivity;
+            lastLocationData.transmitLocationData(WorkoutService.LOCATION_OK, lastLocation);
+        } else if (workoutService !=null){
+            startLocationUpdates();
+            if (isReconnecting) {
+                bakeToast(workoutService.getResources().getString(R.string.reconnected));
+                isReconnecting = false;
+            }
         }
     }
 
@@ -101,7 +114,7 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
         }
 //TODO when is it not valid?
         InputData inputData = workoutService;
-        inputData.transmitLocationData(InputData.INPUT_VALID, location);
+        inputData.transmitLocationData(WorkoutService.LOCATION_OK, location);
 
     }
 
@@ -113,6 +126,32 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
     }
 
     private void bakeToast(CharSequence sequence) {
-        Toast.makeText(workoutService, sequence, Toast.LENGTH_SHORT).show();
+        Toast.makeText(context, sequence, Toast.LENGTH_SHORT).show();
+    }
+
+    public interface InputData {
+
+        /**
+         * Callback when we have a new location.
+         * @param validity Validity of the location object. Possible values:
+         *                 <p>
+         *                 {@link WorkoutService#LOCATION_OK}
+         *                 </p>
+         * @param location The raw location object.
+         */
+        void transmitLocationData(int validity, Location location);
+    }
+
+    public interface LastLocationData{
+        /**
+         * Callback when we have a new location.
+         * @param validity Validity of the location object. Possible values:
+         *                 <p>
+         *                 {@link WorkoutService#LOCATION_OK}
+         *                 </p>
+         * @param location The raw location object.
+         */
+        void transmitLocationData(int validity, Location location);
+
     }
 }

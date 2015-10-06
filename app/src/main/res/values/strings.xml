@@ -34,7 +34,7 @@
     <string name="longitude">Longitude</string>
     <string name="errors">Errors</string>
     <string name="browse_workouts">Browse workouts</string>
-    <string name="stop_workout_in_progress">A workout is in progress. Stop it to see previous workouts.</string>
+    <string name="stop_workout_in_progress">A workout is in progress. Stop it to proceed.</string>
     <string name="yes">Yes</string>
     <string name="cancel">Cancel</string>
     <string name="warning">Warning</string>
@@ -49,4 +49,7 @@
     <string name="error_getting_workouts">Error getting workouts</string>
     <string name="error_accessing_database">Error accessing database</string>
     <string name="dummy">Dummy</string>
+    <string name="title_activity_appoint_path">AppointPathActivity</string>
+    <string name="appoint_path">Appoint path</string>
+
 </resources>

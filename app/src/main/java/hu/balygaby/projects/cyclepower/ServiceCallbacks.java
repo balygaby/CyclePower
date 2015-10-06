@@ -9,19 +9,19 @@ public interface ServiceCallbacks {
      * Fields: see {@link #DisplayData(long, double, double, double, double, double, double, double, double, double, double, double, double, int[])}
      */
     class DisplayData {
-        long time;
-        double speed;
-        double cadence;
-        double gearRatio;
-        double acceleration;
-        double distance;
-        double power;
-        double work;
-        double torque;
-        double latitude;
-        double longitude;
-        double elevation;
-        double steepness;
+        private long time;
+        private double speed;
+        private double cadence;
+        private double gearRatio;
+        private double acceleration;
+        private double distance;
+        private double power;
+        private double work;
+        private double torque;
+        private double latitude;
+        private double longitude;
+        private double elevation;
+        private double steepness;
         int[] errors;
 
         /**

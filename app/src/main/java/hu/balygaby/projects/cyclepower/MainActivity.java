@@ -1,17 +1,18 @@
 package hu.balygaby.projects.cyclepower;
 
-import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.location.Location;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -20,46 +21,55 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.sleepycat.je.DatabaseException;
 
+import hu.balygaby.projects.cyclepower.connectivity.LocationService;
 import hu.balygaby.projects.cyclepower.database.ByteConverter;
 import hu.balygaby.projects.cyclepower.database.ManageDb;
 import hu.balygaby.projects.cyclepower.database.objects.WorkoutEntry;
+import hu.balygaby.projects.cyclepower.serving_activities.AppointPathActivity;
 import hu.balygaby.projects.cyclepower.serving_activities.SettingsActivity;
 import hu.balygaby.projects.cyclepower.serving_activities.WorkoutsOverviewActivity;
 
 
-public class MainActivity extends Activity implements ServiceCallbacks{
+public class MainActivity extends FragmentActivity implements ServiceCallbacks, LocationService.LastLocationData{
 
+    // SHA1: 66:03:8B:66:B4:5E:EA:EB:14:0A:18:B2:70:40:A2:70:29:E5:D0:77
+    public static final String MAPS_API_KEY = "AIzaSyDAEX_wDgtyWtcNhvz2oaoNyJFoDTfc-tk";
+    public static final String MAPS_ANDROID_KEY = "AIzaSyDfOrVAYVGQL9bTixqE23hBaewjfG5OOKM";
     public static final String KEY_IS_SERVICE_ON = "is_service_on";
     private static final String INITIAL_LATITUDE = "initial_latitude";
     private static final String INITIAL_LONGITUDE = "initial_longitude";
+    private static final int REQUEST_APPOINT_PATH = 2015;
     /**
      * The service instance.
      */
-    WorkoutService workoutService;
+    private WorkoutService workoutService;
     /**
      * The service runs independently from the workoutData. In this variable
      * the service status is stored for reference purposes.
      */
-    boolean isServiceOn;
+    private boolean isServiceOn;
     /**
      * Is the service bound by the IBinder.
      */
     private boolean isServiceBound = false;
 
-    TextView tvElapsedTime, tvSpeed, tvCadence, tvDistance, tvGearRatio, tvAcceleration,
-            tvPower, tvTorque, tvWork, tvSteepness, tvElevation, tvLatitude, tvLongitude, tvErrors;
+    private GoogleMap googleMap;
+
+    private TextView tvElapsedTime, tvSpeed, tvCadence, tvDistance, tvGearRatio, tvAcceleration,
+            tvPower, tvTorque, tvWork, tvSteepness, tvElevation, tvErrors;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        //TODO everything in a service, which is synced with the app whenever it's in foreground
-        //calculate acceleration, power, torque
-        //calculate optimal speed to get to a point
 
         tvElapsedTime = (TextView)findViewById(R.id.tv_elapsed_time);
         tvSpeed = (TextView)findViewById(R.id.tv_speed);
@@ -72,9 +82,10 @@ public class MainActivity extends Activity implements ServiceCallbacks{
         tvWork = (TextView)findViewById(R.id.tv_work);
         tvSteepness = (TextView)findViewById(R.id.tv_steepness);
         tvElevation = (TextView)findViewById(R.id.tv_elevation);
-        tvLatitude = (TextView)findViewById(R.id.tv_latitude);
-        tvLongitude = (TextView)findViewById(R.id.tv_longitude);
         tvErrors = (TextView)findViewById(R.id.tv_errors);
+
+
+        setUpMapIfNeeded();
 
         /*Log.d("debug","bytearray: "+ Arrays.toString(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
         Log.d("debug",""+ByteConverter.getDistanceFromBytes(ByteConverter.convertDataToByteArray(10000, 10000, 30.56, 70.44, 121.11, 55.65, 47.5034524624, 19.10232442)));
@@ -120,6 +131,41 @@ public class MainActivity extends Activity implements ServiceCallbacks{
                 startStop();
             }
         });
+    }
+
+    /**
+     * Sets up the map if it is possible to do so (i.e., the Google Play services APK is correctly
+     * installed) and the map has not already been instantiated.. T
+     * <p/>
+     * If it isn't installed {@link SupportMapFragment} (and
+     * {@link com.google.android.gms.maps.MapView MapView}) will show a prompt for the user to
+     * install/update the Google Play services APK on their device.
+     * <p/>
+     * A user can return to this FragmentActivity after following the prompt and correctly
+     * installing/updating/enabling the Google Play services. Since the FragmentActivity may not
+     * have been completely destroyed during this process (it is likely that it would only be
+     * stopped or paused), {@link #onCreate(Bundle)} may not be called again so we should call this
+     * method in {@link #onResume()} to guarantee that it will be called.
+     */
+    private void setUpMapIfNeeded() {
+        // Do a null check to confirm that we have not already instantiated the map.
+        if (googleMap == null) {
+            // Try to obtain the map from the SupportMapFragment.
+            //googleMap = ((SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.main_activity_map_container)).getMap();
+            SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.main_activity_map_container);
+            mapFragment.getMapAsync(new OnMapReadyCallback() {
+                @Override
+                public void onMapReady(GoogleMap gm) {
+                    googleMap = gm;
+                }
+            });
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        setUpMapIfNeeded();
     }
 
     @Override
@@ -247,10 +293,10 @@ public class MainActivity extends Activity implements ServiceCallbacks{
                 tvWork.setText(data.getWork() + "J");
                 tvSteepness.setText(data.getSteepness() + " %");
                 tvElevation.setText(data.getElevation() + " m");
-                tvLatitude.setText(data.getLatitude() + "");
-                tvLongitude.setText(data.getLongitude() +"");
                 tvErrors.setText(data.getErrors()[0] + ";" + data.getErrors()[1] + ";" + data.getErrors()[2] + ";" + data.getErrors()[3] + ";" + data.getErrors()[4] + ";" + data.getErrors()[5]);
-
+                googleMap.clear();
+                googleMap.addMarker(new MarkerOptions()
+                        .position(new LatLng(data.getLatitude(), data.getLongitude())));
                 //todo register errors
             }
         });
@@ -283,14 +329,36 @@ public class MainActivity extends Activity implements ServiceCallbacks{
             }
             startActivity(new Intent(MainActivity.this, WorkoutsOverviewActivity.class));
             return true;
+        }else if (id == R.id.action_appoint_path){
+            if (isServiceOn){
+                bakeToast(getResources().getString(R.string.stop_workout_in_progress));
+                return true;
+            }
+            startActivityForResult(new Intent(MainActivity.this, AppointPathActivity.class), REQUEST_APPOINT_PATH);
+            return true;
         }
 
         return super.onOptionsItemSelected(item);
     }
     //</editor-fold>
 
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_APPOINT_PATH){
+            //todo service intent putExtra path
+
+
+        }
+    }
+
     void bakeToast(String text){
         Toast.makeText(MainActivity.this, text, Toast.LENGTH_LONG).show();
     }
 
+    @Override
+    public void transmitLocationData(int validity, Location location) {
+        //// TODO: 2015.10.06.  
+    }
 }

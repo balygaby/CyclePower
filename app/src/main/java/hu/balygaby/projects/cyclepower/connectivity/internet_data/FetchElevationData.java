@@ -12,11 +12,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Locale;
 
+import hu.balygaby.projects.cyclepower.MainActivity;
 import hu.balygaby.projects.cyclepower.WorkoutService;
 
 /**
@@ -26,7 +26,7 @@ import hu.balygaby.projects.cyclepower.WorkoutService;
 public class FetchElevationData {
     //https://maps.googleapis.com/maps/api/elevation/json?locations=%f,%f&key=%s , lat, long, apikey
 
-    public static final String MAPS_API_KEY = "AIzaSyDjJDRSVU7-jnNzq82RTPnCm_-24JyuTm0";
+
     private static final String GOOGLE_MAP_ELEVATION_API =
             "https://maps.googleapis.com/maps/api/elevation/json?locations=%f,%f&key=%s";
     private static final String HTTP_FAILURE = "http_failure";
@@ -63,8 +63,8 @@ public class FetchElevationData {
      * @return      the network availability
      */
     public boolean requestElevationData(double latitude, double longitude){
-        processStatus = AsyncResponse.AWAITING_DATA_REQUEST;
-        String stringUrl = String.format(Locale.ENGLISH,GOOGLE_MAP_ELEVATION_API, latitude, longitude, MAPS_API_KEY);
+        processStatus = WorkoutService.AWAITING_DATA_REQUEST;
+        String stringUrl = String.format(Locale.ENGLISH,GOOGLE_MAP_ELEVATION_API, latitude, longitude, MainActivity.MAPS_API_KEY);
         ConnectivityManager connMgr = (ConnectivityManager)
                 workoutService.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
@@ -78,18 +78,18 @@ public class FetchElevationData {
 
     private int processRawElevation(String result){
         this.elevation = 0;
-        if (result.length() == 0 || result.equals(HTTP_FAILURE)) return AsyncResponse.RESULT_HTTP_FAILURE;
+        if (result.length() == 0 || result.equals(HTTP_FAILURE)) return WorkoutService.RESULT_HTTP_FAILURE;
         JSONObject elevationJSON;
         try {
             elevationJSON = new JSONObject(result);
-            if (!elevationJSON.getString(KEY_STATUS).equals(OK)) return AsyncResponse.RESULT_ELEVATION_NOT_OK;
+            if (!elevationJSON.getString(KEY_STATUS).equals(OK)) return WorkoutService.RESULT_ELEVATION_NOT_OK;
             this.elevation = elevationJSON.getJSONArray(KEY_RESULTS).getJSONObject(0).getDouble(KEY_ELEVATION);
             this.latitude = elevationJSON.getJSONArray(KEY_RESULTS).getJSONObject(0).getJSONObject(KEY_LOCATION).getDouble(KEY_LATITUDE);
             this.longitude = elevationJSON.getJSONArray(KEY_RESULTS).getJSONObject(0).getJSONObject(KEY_LOCATION).getDouble(KEY_LONGITUDE);
         } catch (JSONException e) {
-            return AsyncResponse.RESULT_INVALID_JSON;
+            return WorkoutService.RESULT_INVALID_JSON;
         }
-        return AsyncResponse.RESULT_JSON_OK;
+        return WorkoutService.RESULT_JSON_OK;
     }
 
     private class HttpTask extends AsyncTask<String, Void, String> {
@@ -108,7 +108,7 @@ public class FetchElevationData {
         @Override
         protected void onPostExecute(String result) {
             processStatus = processRawElevation(result);
-            asyncResponse.elevationProcessFinish(processStatus, elevation, latitude, longitude); //TODO return coordinates
+            asyncResponse.elevationProcessFinish(processStatus, elevation, latitude, longitude);
 
         }
     }
@@ -147,7 +147,7 @@ public class FetchElevationData {
     }
 
     // Reads an InputStream and converts it to a String.
-    public String readIt(InputStream stream, int len) throws IOException, UnsupportedEncodingException {
+    public String readIt(InputStream stream, int len) throws IOException {
         Reader reader;
         reader = new InputStreamReader(stream, "UTF-8");
         char[] buffer = new char[len];
@@ -155,4 +155,29 @@ public class FetchElevationData {
         return new String(buffer);
     }
     //</editor-fold>
+
+
+    public interface AsyncResponse {
+
+        /**
+         * Callback when the elevation request is finished and the elevation value
+         * is fetched.
+         *
+         * @param processStatus Result of the http request and the JSON processing.
+         * <p>
+         *     Elevation is only valid, if the status is {@link WorkoutService#RESULT_JSON_OK}.
+         *                      Possible values:
+         *                      <br>{@link WorkoutService#AWAITING_DATA_REQUEST}
+         *                      <br>{@link WorkoutService#RESULT_JSON_OK}
+         *                      <br>{@link WorkoutService#RESULT_HTTP_FAILURE}
+         *                      <br>{@link WorkoutService#RESULT_INVALID_JSON}
+         *                      <br>{@link WorkoutService#RESULT_ELEVATION_NOT_OK}
+         * </p>
+         * @param elevation The resulting elevation. In the case of failure, the
+         *                  value is 0.
+         * @param latitude Latitude regarding the location.
+         * @param longitude Longitude regarding the location.
+         */
+        void elevationProcessFinish(int processStatus, double elevation, double latitude, double longitude);
+    }
 }
