@@ -51,5 +51,28 @@
     <string name="dummy">Dummy</string>
     <string name="title_activity_appoint_path">AppointPathActivity</string>
     <string name="appoint_path">Appoint path</string>
+    <string name="origin">Origin</string>
+    <string name="destination">Destination</string>
+    <string name="path_find_error">Error finding path. Try again.</string>
+    <string name="path_no_directions">No available paths found. Try again.</string>
+    <string name="arrow_back"><![CDATA[<]]></string>
+    <string name="arrow_forward"><![CDATA[>]]></string>
+    <string name="path_done">Select path</string>
+    <string name="no_path_selected">No path selected</string>
+    <string name="hours">Hours</string>
+    <string name="minutes">Minutes</string>
+    <string name="ok">OK</string>
+    <string-array name="path_actions_array">
+        <item>Find paths to here</item>
+    </string-array>
+    <string-array name="main_map_actions_array_no_path">
+        <item>Appoint desired path</item>
+    </string-array>
+    <string-array name="main_map_actions_array_path_ok">
+        <item>Clear path</item>
+    </string-array>
+    <string name="title_activity_debug_db">DebugDbActivity</string>
+
+
 
 </resources>

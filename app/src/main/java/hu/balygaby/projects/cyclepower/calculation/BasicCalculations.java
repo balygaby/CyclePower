@@ -3,8 +3,6 @@ package hu.balygaby.projects.cyclepower.calculation;
 
 import android.location.Location;
 
-import hu.balygaby.projects.cyclepower.WorkoutService;
-
 public class BasicCalculations {
 
     /**
@@ -62,7 +60,7 @@ public class BasicCalculations {
      * @param angle2 Angle 2 in deg.
      * @return Difference in degrees.
      */
-    public static double calculateDifferenceBetweenAngles(double angle1, double angle2){
+    protected static double calculateDifferenceBetweenAngles(double angle1, double angle2){
         return (angle1 - angle2 + 540) % 360 - 180;
     }
 
@@ -93,7 +91,6 @@ public class BasicCalculations {
      * @return The steepness in % (from the latter to the former).
      */
     public static double calculateSteepness(Location elevationLocation, Location lastElevationLocation) {
-        //TODO take into account that the data might be older because of some network delay
         double distance = lastElevationLocation.distanceTo(elevationLocation);
         if (distance == 0) return 0;
         double elevationDifference = elevationLocation.getAltitude() - lastElevationLocation.getAltitude();
@@ -104,9 +101,10 @@ public class BasicCalculations {
     /**
      * Calculates the work increment from the service onCreate.
      * @param power Current power in W.
+     * @param periodOfCalculation Period of power calculation in ms.
      * @return The new value.
      */
-    public static double calculateWorkIncrement(double power){
-        return power * WorkoutService.PERIOD_OF_CALCULATION/*ms*/ / 1000;
+    public static double calculateWorkIncrement(double power, double periodOfCalculation){
+        return power * periodOfCalculation/*ms*/ / 1000;
     }
 }

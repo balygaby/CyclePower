@@ -7,10 +7,10 @@ public class DecimalToFraction {
     public static NomDenom convert(double decimal) {
         int nominator = 0;
         int denominator = 0;
-        for (int i = 1; i < 1025; i++) {
+        for (int i = 1; i < 10; i++) {
             double potentialNominatorDouble = i * decimal;
             long potentialNominatorLong = Math.round(potentialNominatorDouble);
-            if (Math.abs(potentialNominatorDouble - (double) potentialNominatorLong) < 0.000001) {
+            if (Math.abs(potentialNominatorDouble - (double) potentialNominatorLong) < 0.001) {
                 nominator = (int) potentialNominatorLong;
                 denominator = i;
                 break;

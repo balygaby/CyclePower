@@ -2,6 +2,7 @@ package hu.balygaby.projects.cyclepower;
 
 import android.app.Activity;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -186,11 +187,20 @@ public class WorkoutService extends Service implements FetchElevationData.AsyncR
         //</editor-fold>
 
         //<editor-fold desc="BUILDING NOTIFICATION">
+        Intent mainIntent = new Intent(this, MainActivity.class);
+        PendingIntent pendingIntent =
+                PendingIntent.getActivity(
+                        this,
+                        0,
+                        mainIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT
+                );
         NotificationCompat.Builder mBuilder =
                 new NotificationCompat.Builder(this)
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle(getResources().getString(R.string.app_name))
                         .setContentText(getResources().getString(R.string.session_on))
+                        .setContentIntent(pendingIntent)
                         .setOngoing(true);
         int mNotificationId = NOTIFICATION_ID;
 // Gets an instance of the NotificationManager service
@@ -344,8 +354,8 @@ public class WorkoutService extends Service implements FetchElevationData.AsyncR
                 //todo do calculations
                 double totalResistance = CalculateDynamics.calculateTotalResistance(speed, direction, windSpeed, windAngle, bicycleWeight, yourWeight, steepness, acceleration);
                 power = CalculateDynamics.calculatePower(speed, totalResistance);
-                torque = CalculateDynamics.calculateTorque(cadence, totalResistance, wheelPerimeter, gearRatio);
-                work += BasicCalculations.calculateWorkIncrement(power);
+                torque = CalculateDynamics.calculateTorque(totalResistance, wheelPerimeter, gearRatio);
+                work += BasicCalculations.calculateWorkIncrement(power, PERIOD_OF_CALCULATION);
             }
         };
         //calculations in every 250 ms todo write back to 250 maybe
@@ -421,10 +431,10 @@ public class WorkoutService extends Service implements FetchElevationData.AsyncR
     public void elevationProcessFinish(int processStatus, double elevation, double latitude, double longitude) {
         if (processStatus == RESULT_JSON_OK){
             this.elevation = elevation;
-            Location elevationLocation = this.location;
+            Location elevationLocation = new Location("");//new location object
             elevationLocation.setLatitude(latitude); elevationLocation.setLongitude(longitude);elevationLocation.setAltitude(elevation);
             if (lastElevationLocation == null) {//on first run avoid passing null
-                lastElevationLocation = this.location;
+                lastElevationLocation = new Location("");
                 lastElevationLocation.setLatitude(latitude); lastElevationLocation.setLongitude(longitude);lastElevationLocation.setAltitude(elevation);
             }
             if (elevationLocation.distanceTo(this.location)>50){//too old data

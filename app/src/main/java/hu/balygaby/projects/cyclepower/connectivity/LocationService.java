@@ -16,16 +16,18 @@ import hu.balygaby.projects.cyclepower.R;
 import hu.balygaby.projects.cyclepower.WorkoutService;
 
 /**
- * Starts a location request for 1 second location updates.
+ * <p>When instantiated with a workoutService parameter, starts a location request for 1 second location updates.
  * When an update arrives, calls the {@link InputData#transmitLocationData(int, Location)} callback.
  * To start updates, just call the constructor and implement the InputData interface.
  * To end updates, call {@link #stopLocationUpdates()} followed by {@link #collapseGoogleApiClient()}
- * to end it all.
+ * to end it all.</p>
+ * <p>When instantiated with a mainActivity parameter, automatically gets the last location data and returns
+ * via the implementation of the {@link hu.balygaby.projects.cyclepower.connectivity.LocationService.LastLocationData}
+ * interface. Automatically kills the GoogleApiClient.</p>
  */
 public class LocationService implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
 
     private boolean isReconnecting = false;
-    private boolean hasNoticedNoLocation = false;
     private GoogleApiClient mGoogleApiClient;
     WorkoutService workoutService;
     MainActivity mainActivity;
@@ -44,6 +46,7 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
     public LocationService(MainActivity mainActivity){
         this.mainActivity = mainActivity;
         this.context = mainActivity.getBaseContext();
+        buildGoogleApiClient();//set up connection
     }
 
     protected synchronized void buildGoogleApiClient() {//runs automatically on startup
@@ -64,8 +67,11 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
         if (mainActivity !=null) {
             Location lastLocation = LocationServices.FusedLocationApi.getLastLocation(
                     mGoogleApiClient);
-            LastLocationData lastLocationData = mainActivity;
-            lastLocationData.transmitLocationData(WorkoutService.LOCATION_OK, lastLocation);
+            if (lastLocation != null) {
+                LastLocationData lastLocationData = mainActivity;
+                lastLocationData.transmitLocationData(WorkoutService.LOCATION_OK, lastLocation);
+            }
+            collapseGoogleApiClient();//automatically stop
         } else if (workoutService !=null){
             startLocationUpdates();
             if (isReconnecting) {
@@ -109,20 +115,8 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
     @Override
     public void onLocationChanged(Location location) {//this arrives due to the LocationRequest
         //when a position arrives, write it to file and also to the bottom of the screen
-        if (hasNoticedNoLocation) {
-            hasNoticedNoLocation = false;
-        }
-//TODO when is it not valid?
         InputData inputData = workoutService;
         inputData.transmitLocationData(WorkoutService.LOCATION_OK, location);
-
-    }
-
-    private void noLocation() {
-        if (!hasNoticedNoLocation) {
-            bakeToast(workoutService.getResources().getString(R.string.last_location_is_null));
-            hasNoticedNoLocation = true;
-        }
     }
 
     private void bakeToast(CharSequence sequence) {
@@ -144,7 +138,7 @@ public class LocationService implements GoogleApiClient.ConnectionCallbacks, Goo
 
     public interface LastLocationData{
         /**
-         * Callback when we have a new location.
+         * Callback when we have the last location.
          * @param validity Validity of the location object. Possible values:
          *                 <p>
          *                 {@link WorkoutService#LOCATION_OK}

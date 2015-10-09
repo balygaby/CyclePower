@@ -106,7 +106,7 @@ public class CalculateDynamics {
      * @param gearRatio Gear ratio, wheel rpm / pedal rpm.
      * @return The current torque in Nm.
      */
-    public static double calculateTorque(double cadence, double totalResistance, double wheelPerimeter, double gearRatio){
+    public static double calculateTorque(double totalResistance, double wheelPerimeter, double gearRatio){
         //M1 = i * F * K / (2pi)
         return totalResistance/*N*/ * wheelPerimeter/*mm*/ / 1000 * gearRatio / 2 / Math.PI;
     }

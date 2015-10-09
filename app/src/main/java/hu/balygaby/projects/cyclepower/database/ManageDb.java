@@ -280,6 +280,7 @@ public class ManageDb {
             try {
                 dbCursor = workoutDatabase.openCursor(null, null);
                 //moving the cursor to the start point
+                Log.d("ManageDb","Searching for key: "+ Arrays.toString(ByteConverter.convertKeyToByteArray(workoutStart)));
                 DatabaseEntry theKey = new DatabaseEntry(ByteConverter.convertKeyToByteArray(workoutStart));
                 DatabaseEntry theData = new DatabaseEntry();
                 OperationStatus searchStatus = dbCursor.getSearchKeyRange(theKey, theData,LockMode.DEFAULT);
@@ -296,11 +297,73 @@ public class ManageDb {
                         OperationStatus.SUCCESS) {
                     // getData() on the DatabaseEntry objects returns the byte array
                     byte[] keyBytes = foundKey.getData();
+                    Log.d("ManageDb","Found key: "+ Arrays.toString((keyBytes)));
                     byte[] dataBytes = foundData.getData();
 
                     if (ByteConverter.getTimeFromBytes(keyBytes)>=workoutEnd) break;//todo compare byte arrays
                    // if (Arrays.equals(keyBytes,ByteConverter.convertKeyToByteArray(workoutEnd))) break; //when we reach the start of the next workout, it's the end
                     //adding record to the entry array right away
+                    else {
+                        workoutEntries.add(new WorkoutEntry(ByteConverter.getTimeFromBytes(keyBytes),
+                                ByteConverter.getDistanceFromBytes(dataBytes),
+                                ByteConverter.getWorkFromBytes(dataBytes),
+                                ByteConverter.getSpeedFromBytes(dataBytes),
+                                ByteConverter.getCadenceFromBytes(dataBytes),
+                                ByteConverter.getPowerFromBytes(dataBytes),
+                                ByteConverter.getTorqueFromBytes(dataBytes),
+                                ByteConverter.getLatitudeFromBytes(dataBytes),
+                                ByteConverter.getLongitudeFromBytes(dataBytes)));
+                    }
+                }
+            } catch (DatabaseException de) {
+                Log.d("ManageDb","Error accessing database." + de);
+                throw de;
+            } finally {
+                // Cursors must be closed.
+                try {
+                    dbCursor.close();
+                } catch (DatabaseException e) {
+                    Log.d("ManageDb", "Couldn't close cursor" + e);
+                }
+            }
+        }
+        return workoutEntries;
+    }
+
+    /**
+     * Can read all available workout entry records in the database.
+     * This method is solely for debug purposes.
+     * @return The specific workout.
+     */
+    public ArrayList<WorkoutEntry> readAllRecords() throws Exception {
+        ArrayList<WorkoutEntry> workoutEntries = new ArrayList<>();
+        if ((dbEnvironment != null) && (workoutDatabase != null)) {
+            try {
+                dbCursor = workoutDatabase.openCursor(null, null);
+                //moving the cursor to the start point
+                Log.d("ManageDb","Searching for key: "+ Arrays.toString(ByteConverter.convertKeyToByteArray(workoutStart)));
+                DatabaseEntry theKey = new DatabaseEntry(ByteConverter.convertKeyToByteArray(workoutStart));
+                DatabaseEntry theData = new DatabaseEntry();
+                OperationStatus searchStatus = dbCursor.getSearchKeyRange(theKey, theData,LockMode.DEFAULT);
+                if (searchStatus != OperationStatus.SUCCESS) throw new Exception("Couldn't find search key");
+
+                DatabaseEntry foundKey = new DatabaseEntry();
+                DatabaseEntry foundData = new DatabaseEntry();
+
+
+                // To iterate, just call getNext() from the start record until the end database record has
+                // been read. All cursor operations return an OperationStatus, so just
+                // read until we no longer see OperationStatus.SUCCESS
+                while (dbCursor.getNext(foundKey, foundData, LockMode.DEFAULT) ==
+                        OperationStatus.SUCCESS) {
+                    // getData() on the DatabaseEntry objects returns the byte array
+                    byte[] keyBytes = foundKey.getData();
+                    Log.d("ManageDb","Found key: "+ Arrays.toString((keyBytes)));
+                    byte[] dataBytes = foundData.getData();
+
+                    if (ByteConverter.getTimeFromBytes(keyBytes)>=workoutEnd) break;//todo compare byte arrays
+                        // if (Arrays.equals(keyBytes,ByteConverter.convertKeyToByteArray(workoutEnd))) break; //when we reach the start of the next workout, it's the end
+                        //adding record to the entry array right away
                     else {
                         workoutEntries.add(new WorkoutEntry(ByteConverter.getTimeFromBytes(keyBytes),
                                 ByteConverter.getDistanceFromBytes(dataBytes),
